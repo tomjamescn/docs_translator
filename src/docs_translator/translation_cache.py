@@ -7,7 +7,8 @@ import os
 import json
 import hashlib
 import logging
-from typing import Dict, Optional, List, Tuple
+import re
+from typing import Dict, Optional, List, Tuple, Any
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,26 @@ class TranslationCache:
         combined = f"{text}|{target_lang}"
         return hashlib.md5(combined.encode('utf-8')).hexdigest()
     
+    def _extract_language_from_key(self, key: str) -> Optional[str]:
+        """从缓存条目中提取语言信息。
+        
+        参数
+        ----------
+        key : str
+            缓存键
+            
+        返回
+        -------
+        Optional[str]
+            语言代码，如无法提取则返回None
+        """
+        # 尝试从缓存中获取原始文本和目标语言
+        # 这是个近似方法，因为我们只有哈希值，无法恢复原始信息
+        for target_lang in ["zh-CN", "zh_CN", "en", "ja", "ko", "fr", "de", "es", "ru"]:
+            if key.endswith(target_lang):
+                return target_lang
+        return None
+    
     def get(self, text: str, target_lang: str) -> Optional[str]:
         """获取缓存的翻译结果。
         
@@ -208,11 +229,124 @@ class TranslationCache:
             "cache_file": self.cache_path
         }
     
+    def get_language_stats(self) -> Dict[str, int]:
+        """获取缓存中的语言分布统计。
+        
+        Returns
+        -------
+        Dict[str, int]
+            各目标语言的条目数量
+        """
+        language_counts = {}
+        
+        # 尝试根据常见语言代码匹配
+        for key in self.cache.keys():
+            # 存储原始键和目标语言的映射
+            meta_key = f"__meta__{key}"
+            if meta_key in self.cache:
+                # 如果有元数据，直接使用
+                meta = json.loads(self.cache[meta_key])
+                lang = meta.get("target_lang")
+            else:
+                # 否则尝试从内容推断
+                content = self.cache[key]
+                lang = self._detect_language(content)
+            
+            if lang:
+                language_counts[lang] = language_counts.get(lang, 0) + 1
+            else:
+                language_counts["unknown"] = language_counts.get("unknown", 0) + 1
+        
+        return language_counts
+    
+    def _detect_language(self, text: str) -> Optional[str]:
+        """尝试检测文本语言。
+        
+        Parameters
+        ----------
+        text : str
+            要检测的文本
+            
+        Returns
+        -------
+        Optional[str]
+            检测到的语言代码，无法确定时返回None
+        """
+        # 简单的语言检测规则
+        if re.search(r'[\u4e00-\u9fff]', text):
+            # 含有中文字符
+            return "zh"
+        elif re.search(r'[あ-んア-ン]', text):
+            # 含有日文假名
+            return "ja"
+        elif re.search(r'[가-힣]', text):
+            # 含有韩文字符
+            return "ko"
+        elif re.search(r'[а-яА-Я]', text):
+            # 含有俄文字符
+            return "ru"
+        elif re.search(r'[a-zA-Z]', text):
+            # 含有拉丁字母，可能是英文或欧洲语言
+            return "en"  # 默认作为英文
+        return None
+    
     def clear(self) -> None:
         """清空缓存。"""
         self.cache = {}
         self._save_cache()
         logger.info("翻译缓存已清空")
+    
+    def export_data(self) -> Dict[str, str]:
+        """导出缓存数据。
+        
+        Returns
+        -------
+        Dict[str, str]
+            缓存数据副本
+        """
+        return self.cache.copy()
+    
+    def import_data(self, data: Dict[str, str], merge: bool = False) -> int:
+        """导入缓存数据。
+        
+        Parameters
+        ----------
+        data : Dict[str, str]
+            要导入的缓存数据
+        merge : bool, optional
+            是否与现有缓存合并，默认为False（替换）
+            
+        Returns
+        -------
+        int
+            导入后的缓存条目数量
+        """
+        if not merge:
+            # 替换模式
+            self.cache = data.copy()
+        else:
+            # 合并模式
+            self.cache.update(data)
+        
+        # 保存更新后的缓存
+        self._save_cache()
+        return len(self.cache)
+    
+    def compact(self) -> int:
+        """压缩缓存，删除重复项。
+        
+        Returns
+        -------
+        int
+            压缩后的缓存条目数量
+        """
+        # 实际上，按照当前的实现，缓存键是唯一的（MD5哈希），
+        # 所以理论上不会有重复项。这个方法主要是为了未来可能的
+        # 缓存结构变化做准备。
+        
+        # 当前实现只是重新保存缓存
+        self._save_cache()
+        return len(self.cache)
     
     def __del__(self):
         """析构函数，确保缓存被保存。"""

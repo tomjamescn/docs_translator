@@ -28,6 +28,7 @@ setup(
     entry_points={
         "console_scripts": [
             "docs-translator=docs_translator.cli:main",
+            "docs-translator-cache=docs_translator.cache_tool:main",
         ],
     },
     author="Author",

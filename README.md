@@ -11,6 +11,7 @@ Docs Translator 是一个用于自动翻译技术文档的工具，支持 Sphinx
 - 批量翻译功能，提高处理效率
 - 实时显示翻译进度和统计信息
 - 翻译缓存机制，避免重复翻译相同内容
+- 缓存管理工具，支持清理、导入导出和查看统计
 
 ## 安装
 
@@ -39,6 +40,9 @@ docs-translator /path/to/markdown/docs /path/to/output --doc-type markdown --tar
 
 # 自动检测文档类型并翻译
 docs-translator /path/to/docs /path/to/output --target-lang zh-CN
+
+# 使用缓存和批量翻译选项
+docs-translator /path/to/docs /path/to/output --use-cache --cache-dir /custom/cache/dir --batch-size 20
 ```
 
 ### 作为库使用
@@ -82,6 +86,7 @@ processor.process()
 - 在多次运行之间保持缓存，持久化保存
 - 缓存命中时跳过API调用，节省时间和费用
 - 提供详细的缓存使用统计信息
+- 支持缓存管理工具，可清理、导出和导入缓存
 
 ### 缓存配置
 
@@ -104,6 +109,39 @@ processor = SphinxIntlProcessor(
 )
 ```
 
+### 缓存管理工具
+
+项目提供了专用的缓存管理命令行工具，使用方法如下：
+
+```bash
+# 查看缓存信息和统计
+docs-translator-cache info
+
+# 清空缓存内容（保留文件）
+docs-translator-cache clear
+
+# 删除缓存文件
+docs-translator-cache delete
+
+# 导出缓存到文件
+docs-translator-cache export /path/to/export.json
+
+# 从文件导入缓存
+docs-translator-cache import /path/to/import.json
+
+# 导入并与现有缓存合并
+docs-translator-cache import /path/to/import.json --merge
+
+# 压缩缓存（删除重复项）
+docs-translator-cache compact
+
+# 指定自定义缓存目录
+docs-translator-cache info --cache-dir /custom/cache/directory
+
+# 查看详细帮助
+docs-translator-cache --help
+```
+
 ### 缓存存储位置
 
 默认情况下，缓存存储在用户家目录的 `.docs_translator/cache` 文件夹下的 `translation_cache.json` 文件中。
@@ -121,7 +159,7 @@ processor = SphinxIntlProcessor(
 
 1. 使用前请确保您有有效的OpenAI API密钥或兼容的替代API
 2. 对于大型文档项目，建议适当调整批量大小以优化效率
-3. 默认缓存会持续增长，如需清理可手动删除缓存文件
+3. 默认缓存会持续增长，可使用缓存管理工具定期清理或压缩
 
 ## 许可证
 
