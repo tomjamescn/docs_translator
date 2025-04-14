@@ -7,8 +7,9 @@ import os
 from typing import Dict, List, Optional, Any
 
 from .translator import OpenAITranslator, BaseTranslator
-from .parsers import MarkdownParser, SphinxParser, BaseParser
+from .parsers import MarkdownParser, SphinxIntlParser, BaseParser
 from .processor import DocumentProcessor
+from .sphinx_intl_processor import SphinxIntlProcessor
 
 
 def translate_docs(
@@ -18,7 +19,10 @@ def translate_docs(
     target_lang: str = "zh-CN",
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-3.5-turbo",
+    use_cache: bool = True,
+    cache_dir: Optional[str] = None,
+    batch_size: int = 10
 ) -> None:
     """翻译文档目录。
     
@@ -31,7 +35,7 @@ def translate_docs(
     output_dir : str
         翻译输出目录路径
     doc_type : str, optional
-        文档类型，可选值为"markdown"、"sphinx"或"auto"，默认为"auto"
+        文档类型，可选值为"markdown"、"sphinx-intl"或"auto"，默认为"auto"
     target_lang : str, optional
         目标语言，默认为"zh-CN"
     api_key : str, optional
@@ -40,6 +44,12 @@ def translate_docs(
         API的基础URL，默认为OpenAI的API地址
     model : str, optional
         使用的模型名称，默认为"gpt-3.5-turbo"
+    use_cache : bool, optional
+        是否使用翻译缓存，默认为True
+    cache_dir : str, optional
+        自定义缓存目录，默认为None（使用默认目录）
+    batch_size : int, optional
+        批量翻译时每批处理的条目数量，默认为10
         
     Raises
     ------
@@ -62,31 +72,48 @@ def translate_docs(
     translator = OpenAITranslator(
         api_key=api_key,
         api_base=api_base,
-        model=model
+        model=model,
+        use_cache=use_cache,
+        cache_dir=cache_dir
     )
     
-    # 创建解析器
-    if doc_type == "markdown":
+    # 创建解析器和处理器
+    is_sphinx = _is_sphinx_project(source_dir)
+    
+    if doc_type == "markdown" or (doc_type == "auto" and not is_sphinx):
+        # Markdown文档
         parser = MarkdownParser(source_dir)
-    elif doc_type == "sphinx":
-        parser = SphinxParser(source_dir)
+        
+        # 创建通用文档处理器
+        processor = DocumentProcessor(
+            parser=parser,
+            translator=translator,
+            output_dir=output_dir,
+            target_lang=target_lang,
+            batch_size=batch_size
+        )
+        
+        # 开始处理
+        processor.process_all()
+        
+    elif doc_type == "sphinx-intl" or (doc_type == "auto" and is_sphinx):
+        # Sphinx文档 + sphinx-intl
+        parser = SphinxIntlParser(source_dir)
+        
+        # 创建sphinx-intl处理器
+        processor = SphinxIntlProcessor(
+            parser=parser,
+            translator=translator,
+            output_dir=output_dir,
+            target_lang=target_lang.replace("-", "_"),  # 将zh-CN转换为zh_CN
+            batch_size=batch_size
+        )
+        
+        # 开始处理
+        processor.process()
+        
     else:
-        # 自动检测
-        if _is_sphinx_project(source_dir):
-            parser = SphinxParser(source_dir)
-        else:
-            parser = MarkdownParser(source_dir)
-    
-    # 创建文档处理器
-    processor = DocumentProcessor(
-        parser=parser,
-        translator=translator,
-        output_dir=output_dir,
-        target_lang=target_lang
-    )
-    
-    # 开始处理
-    processor.process_all()
+        raise ValueError(f"不支持的文档类型: {doc_type}")
 
 
 def _is_sphinx_project(directory: str) -> bool:

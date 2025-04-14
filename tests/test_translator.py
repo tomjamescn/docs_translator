@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 from docs_translator.translator import BaseTranslator, OpenAITranslator
 from docs_translator.parsers.base import BaseParser
 from docs_translator.parsers.markdown import MarkdownParser
-from docs_translator.parsers.sphinx import SphinxParser
+from docs_translator.parsers.sphinx_intl import SphinxIntlParser
 from docs_translator.processor import DocumentProcessor
 
 

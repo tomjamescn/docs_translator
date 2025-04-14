@@ -10,7 +10,7 @@ import logging
 from typing import Dict, List, Optional, Any
 
 from .translator import OpenAITranslator
-from .parsers import MarkdownParser, SphinxParser, SphinxIntlParser
+from .parsers import MarkdownParser, SphinxIntlParser
 from .processor import DocumentProcessor
 from .sphinx_intl_processor import SphinxIntlProcessor
 from . import __version__
@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     
     parser.add_argument(
         "--doc-type",
-        choices=["markdown", "sphinx", "sphinx-intl", "auto"],
+        choices=["markdown", "sphinx-intl", "auto"],
         default="auto",
         help="文档类型，默认为auto（自动检测）"
     )
@@ -114,9 +114,22 @@ def parse_args() -> argparse.Namespace:
     )
     
     parser.add_argument(
-        "--use-sphinx-intl",
+        "--batch-size",
+        type=int,
+        default=10,
+        help="批量翻译时每批处理的条目数量，默认为10"
+    )
+    
+    parser.add_argument(
+        "--use-cache",
         action="store_true",
-        help="对Sphinx文档使用sphinx-intl工具流程（优化处理RST文件）"
+        default=True,
+        help="使用翻译缓存以避免重复翻译相同内容，默认启用"
+    )
+    
+    parser.add_argument(
+        "--cache-dir",
+        help="自定义缓存目录，默认使用~/.docs_translator/cache"
     )
     
     return parser.parse_args()
@@ -147,7 +160,9 @@ def main() -> int:
         translator = OpenAITranslator(
             api_key=api_key,
             api_base=api_base,
-            model=args.model
+            model=args.model,
+            use_cache=args.use_cache,
+            cache_dir=args.cache_dir
         )
         
         # 检查源目录
@@ -159,11 +174,12 @@ def main() -> int:
         os.makedirs(args.output_dir, exist_ok=True)
         
         is_sphinx = _is_sphinx_project(args.source_dir)
-        use_sphinx_intl = args.use_sphinx_intl or args.doc_type == "sphinx-intl"
+        use_sphinx_intl = args.doc_type == "sphinx-intl" or (args.doc_type == "auto" and is_sphinx)
         
         # 根据文档类型创建解析器和处理器
         if args.doc_type == "markdown" or (args.doc_type == "auto" and not is_sphinx):
             # Markdown文档
+            from .parsers.markdown import MarkdownParser
             parser = MarkdownParser(args.source_dir)
             logger.info("使用Markdown解析器")
             
@@ -172,13 +188,14 @@ def main() -> int:
                 parser=parser,
                 translator=translator,
                 output_dir=args.output_dir,
-                target_lang=args.target_lang
+                target_lang=args.target_lang,
+                batch_size=args.batch_size
             )
             
             # 开始处理
             processor.process_all()
             
-        elif use_sphinx_intl and is_sphinx:
+        elif use_sphinx_intl:
             # Sphinx文档 + sphinx-intl
             logger.info("使用sphinx-intl处理Sphinx文档")
             
@@ -190,27 +207,16 @@ def main() -> int:
                 parser=parser,
                 translator=translator,
                 output_dir=args.output_dir,
-                target_lang=args.target_lang.replace("-", "_")  # 将zh-CN转换为zh_CN
+                target_lang=args.target_lang.replace("-", "_"),  # 将zh-CN转换为zh_CN
+                batch_size=args.batch_size
             )
             
             # 开始处理
             processor.process()
             
         else:
-            # 常规Sphinx文档
-            parser = SphinxParser(args.source_dir)
-            logger.info("使用常规Sphinx解析器")
-            
-            # 创建通用文档处理器
-            processor = DocumentProcessor(
-                parser=parser,
-                translator=translator,
-                output_dir=args.output_dir,
-                target_lang=args.target_lang
-            )
-            
-            # 开始处理
-            processor.process_all()
+            logger.error(f"无法处理指定的文档类型: {args.doc_type}")
+            return 1
         
         logger.info(f"文档翻译完成，输出目录: {args.output_dir}")
         return 0
