@@ -10,8 +10,9 @@ import logging
 from typing import Dict, List, Optional, Any
 
 from .translator import OpenAITranslator
-from .parsers import MarkdownParser, SphinxParser
+from .parsers import MarkdownParser, SphinxParser, SphinxIntlParser
 from .processor import DocumentProcessor
+from .sphinx_intl_processor import SphinxIntlProcessor
 from . import __version__
 
 
@@ -79,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     
     parser.add_argument(
         "--doc-type",
-        choices=["markdown", "sphinx", "auto"],
+        choices=["markdown", "sphinx", "sphinx-intl", "auto"],
         default="auto",
         help="文档类型，默认为auto（自动检测）"
     )
@@ -110,6 +111,12 @@ def parse_args() -> argparse.Namespace:
         "--verbose", "-v", 
         action="store_true",
         help="启用详细日志输出"
+    )
+    
+    parser.add_argument(
+        "--use-sphinx-intl",
+        action="store_true",
+        help="对Sphinx文档使用sphinx-intl工具流程（优化处理RST文件）"
     )
     
     return parser.parse_args()
@@ -151,24 +158,59 @@ def main() -> int:
         # 创建输出目录
         os.makedirs(args.output_dir, exist_ok=True)
         
-        # 根据文档类型创建解析器
-        if args.doc_type == "markdown" or (args.doc_type == "auto" and not _is_sphinx_project(args.source_dir)):
+        is_sphinx = _is_sphinx_project(args.source_dir)
+        use_sphinx_intl = args.use_sphinx_intl or args.doc_type == "sphinx-intl"
+        
+        # 根据文档类型创建解析器和处理器
+        if args.doc_type == "markdown" or (args.doc_type == "auto" and not is_sphinx):
+            # Markdown文档
             parser = MarkdownParser(args.source_dir)
             logger.info("使用Markdown解析器")
+            
+            # 创建通用文档处理器
+            processor = DocumentProcessor(
+                parser=parser,
+                translator=translator,
+                output_dir=args.output_dir,
+                target_lang=args.target_lang
+            )
+            
+            # 开始处理
+            processor.process_all()
+            
+        elif use_sphinx_intl and is_sphinx:
+            # Sphinx文档 + sphinx-intl
+            logger.info("使用sphinx-intl处理Sphinx文档")
+            
+            # 创建sphinx-intl解析器
+            parser = SphinxIntlParser(args.source_dir)
+            
+            # 创建sphinx-intl处理器
+            processor = SphinxIntlProcessor(
+                parser=parser,
+                translator=translator,
+                output_dir=args.output_dir,
+                target_lang=args.target_lang.replace("-", "_")  # 将zh-CN转换为zh_CN
+            )
+            
+            # 开始处理
+            processor.process()
+            
         else:
+            # 常规Sphinx文档
             parser = SphinxParser(args.source_dir)
-            logger.info("使用Sphinx解析器")
-        
-        # 创建文档处理器
-        processor = DocumentProcessor(
-            parser=parser,
-            translator=translator,
-            output_dir=args.output_dir,
-            target_lang=args.target_lang
-        )
-        
-        # 开始处理
-        processor.process_all()
+            logger.info("使用常规Sphinx解析器")
+            
+            # 创建通用文档处理器
+            processor = DocumentProcessor(
+                parser=parser,
+                translator=translator,
+                output_dir=args.output_dir,
+                target_lang=args.target_lang
+            )
+            
+            # 开始处理
+            processor.process_all()
         
         logger.info(f"文档翻译完成，输出目录: {args.output_dir}")
         return 0

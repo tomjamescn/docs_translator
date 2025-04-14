@@ -6,5 +6,6 @@
 from .base import BaseParser
 from .markdown import MarkdownParser
 from .sphinx import SphinxParser
+from .sphinx_intl import SphinxIntlParser
 
-__all__ = ['BaseParser', 'MarkdownParser', 'SphinxParser']
+__all__ = ['BaseParser', 'MarkdownParser', 'SphinxParser', 'SphinxIntlParser']

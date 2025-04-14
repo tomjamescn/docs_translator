@@ -12,6 +12,8 @@ setup(
         "sphinx>=4.0.0",
         "markdown>=3.4.0",
         "tqdm>=4.64.0",
+        "sphinx-intl>=2.0.0",
+        "polib>=1.1.0",
     ],
     extras_require={
         "dev": [
