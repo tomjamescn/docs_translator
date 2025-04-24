@@ -45,6 +45,16 @@ docs-translator /path/to/docs /path/to/output --target-lang zh-CN
 docs-translator /path/to/docs /path/to/output --use-cache --cache-dir /custom/cache/dir --batch-size 20
 ```
 
+#### 报错信息收集
+> 由于sphinx有很多插件，默认不安装，所以在翻译的时候会报错，这时需要安装对应插件
+```
+# 2025-04-25 04:15:32,828 - docs_translator.parsers.sphinx_intl - ERROR - sphinx-build命令失败:
+# Extension error:
+# Could not import extension sphinxcontrib.autodoc_pydantic (exception: No module named 'sphinxcontrib.autodoc_pydantic')
+
+pip install autodoc-pydantic
+```
+
 ### 作为库使用
 
 ```python
